@@ -55,7 +55,9 @@ Scripts communicate **only through files** in `livrable/`. Names, shapes and key
 - `Moutput` rows: `N1..N5`, number of elements per ring, integers 0..10 stored as floats. All-zero is invalid.
 - Files store **features × samples** (columns = samples). Scripts transpose to **samples × features** when loading for PyTorch.
 - Split: 90 % training / 10 % test, seed `46`, exactly like the professor. Validation (10 % of training) is carved out inside `FM_training.py`.
-- Seeds fixed (`46`, like the professor) so every run is reproducible.
+- Seeds fixed to 46 for **both** NumPy (`np.random.seed(46)`) and PyTorch (`torch.manual_seed(46)`) in every script we write,
+  so every run is reproducible. The professor's FFNN does not fix the torch seed, so it is not reproducible:
+  for comparisons it must be trained several times and reported as mean ± std.
 
 **Our files never overwrite the professor's:** every file we create starts with `fm_`
 (e.g. `fm_normalization_params.npz`, not `normalization_params.npz`).

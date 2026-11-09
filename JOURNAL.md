@@ -115,3 +115,15 @@ Erreur globale de prédiction pondérée : 0.57 %
   Cela pourra se faire sans modifier `prof/` (par exemple un script dans `outils/`).
 - Le rapport s'appelle `rapport/rapport_flow_matching (4).pdf`, alors que `CLAUDE.md` mentionne
   `rapport/rapport_flow_matching.pdf`. Faut-il renommer le fichier ?
+
+---
+
+## Maintenance : nom du rapport + graines torch
+
+*Date : 2026-11-09*
+
+- `rapport/rapport_flow_matching (4).pdf` renommé en `rapport/rapport_flow_matching.pdf` (`git mv`), pour correspondre
+  à `CLAUDE.md`. Il n'y a pas de fichier `.tex` dans le dépôt. Cela répond à la question ouverte de l'étape 0.
+- `CLAUDE.md` §4, puce « Seeds » (modification autorisée explicitement) : tous nos scripts fixent la graine 46 pour
+  **numpy et torch** (`np.random.seed(46)`, `torch.manual_seed(46)`). Le FFNN du professeur ne fixe pas la graine
+  torch (constaté à l'étape 0) : pour les comparaisons, il sera entraîné plusieurs fois et résumé en moyenne ± écart-type.
