@@ -119,7 +119,7 @@ Like the professor's own code, each script stays **self-contained**: shared code
 | Step | Content | Status |
 |---|---|---|
 | 0 | Repo skeleton, README, requirements, .gitignore, JOURNAL; run the professor's FFNN pipeline unchanged (baseline) | ☑ |
-| 1 | `dataset_FM.py` + `repartition_training_test_FM.py` (small N first) + physics sanity check | ☐ |
+| 1 | `dataset_FM.py` + `repartition_training_test_FM.py` (small N first) + physics sanity check | ☑ |
 | 2 | Crude `FM_training.py` (no OT, no guidance, no EMA) | ☐ |
 | 3 | Crude `test_model_FM.py`: generate → verify → select, first FM vs FFNN numbers | ☐ |
 | 4 | Improvements one at a time, each measured: Heun, guidance, OT pairing, EMA, N_tot balancing, 50k samples, final network size | ☐ |
