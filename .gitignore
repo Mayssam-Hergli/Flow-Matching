@@ -1,0 +1,40 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.egg-info/
+.ipynb_checkpoints/
+
+# --- Environnements virtuels ---
+.venv/
+venv/
+env/
+
+# --- Fichiers générés par les scripts (données, modèles, figures) ---
+# Les fichiers entraînés finaux seront ajoutés avec `git add -f` à l'étape 5.
+*.npy
+*.mat
+*.pth
+*.npz
+*.png
+
+# --- Fichiers de résultats texte / config générés ---
+livrable/*.txt
+prof/*.txt
+livrable/fm_config.json
+
+# --- Claude Code : réglages locaux (personnels) ---
+.claude/settings.local.json
+
+# --- LaTeX (fichiers auxiliaires de compilation) ---
+rapport/*.aux
+rapport/*.log
+rapport/*.out
+rapport/*.toc
+rapport/*.synctex.gz
+rapport/*.fls
+rapport/*.fdb_latexmk
+
+# --- Système ---
+.DS_Store
+Thumbs.db
+desktop.ini

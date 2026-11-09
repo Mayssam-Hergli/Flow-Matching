@@ -1,0 +1,6 @@
+# Versions installées et testées à l'étape 0 (Python 3.12.10, Windows 11).
+# torch : la roue installée par défaut sous Windows est la version CPU (2.15.0+cpu).
+torch==2.15.0
+numpy==2.5.4
+scipy==1.18.1
+matplotlib==3.11.2
