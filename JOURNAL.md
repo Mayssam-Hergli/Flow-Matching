@@ -349,3 +349,253 @@ TOUS LES BLOCS COMMUNS SONT COHÉRENTS
 - Relance : `dataset_FM.py`, `repartition_training_test_FM.py`, `verifier_physique.py` (5/5 PASS),
   `verifier_blocs_communs.py` (PASS ; chaque bloc n'a plus qu'une copie pour l'instant). Les 6 matrices de `livrable/`
   sont toujours identiques bit à bit à celles de `prof/`.
+
+---
+
+## Étape 2 : FM_training brut + vérification
+
+*Date : 2026-11-10*
+
+### Ce qui a été construit, en mots simples
+- **`livrable/FM_training.py`** (script livré 3/4) entraîne le réseau de vitesse `VelocityNet`.
+  À chaque pas, il prend des architectures de la base, tire un bruit et un instant au hasard, place un point sur la
+  ligne droite entre bruit et architecture, demande au réseau la vitesse de ce point, et le corrige pour qu'il
+  réponde « architecture − bruit » (rapport, éq. 2–3, algorithme 1, fig. 7). Il garde les poids de la meilleure
+  époque sur la validation, et enregistre `fm_model.pth`, `fm_normalization_params.npz`, `fm_config.json`
+  et `fm_courbe_loss.png` dans `livrable/`.
+  Version brute : sans guidage (`guidage_p_masque = 0.0`), sans appariement optimal, sans EMA.
+- **`outils/verifier_entrainement.py`** (développement, non livré) : bilan de santé. Il reconstruit le réseau à partir
+  de `fm_config.json` (la classe est lue dans le BLOC COMMUN de `FM_training.py`), vérifie la baisse de la perte, puis
+  génère 64 candidats (Euler, 20 pas) pour 20 échantillons de test et regarde si leur nombre total d'éléments
+  correspond au gain demandé (propriété P1). Ce n'est pas l'évaluation de l'étape 3 (pas de métrique du professeur).
+
+### Carte de `FM_training.py`
+| Lignes | Ce que fait cette partie |
+|---|---|
+| 1–23 | En-tête : explique le rôle du script, ses entrées et ses sorties. |
+| 24–32 | Importe les bibliothèques (numpy, torch, matplotlib…). |
+| 36–40 | Affiche la bannière « NOUVELLE EXÉCUTION », comme le professeur. |
+| 43–85 | Bloc unique des réglages (`config`) : données, taille du réseau, entraînement, améliorations désactivées ; raccourcis `D`, `E`, `A`. |
+| 87–89 | Fixe la graine 46 pour numpy et torch, pour que chaque exécution donne le même résultat. |
+| 91–92 | Arrête le script si on active l'appariement optimal ou l'EMA (pas encore écrits). |
+| 98–118 | BLOC COMMUN : un bloc de calcul (normalisation → modulation par le contexte → 2 couches denses → ajout à l'entrée). |
+| 120–160 | BLOC COMMUN : le réseau complet (agrandir 5→256, coder le temps et la condition, 4 blocs, réduire 256→5). |
+| 168–172 | Charge les fichiers d'entraînement et les met en « une ligne = un exemple ». |
+| 174–180 | Met 10 % des exemples de côté pour la validation, au hasard (graine 46). |
+| 182–188 | Construit la condition [G, SSL, HPBW, sin θ0] et la centre-réduit avec la moyenne et l'écart-type de l'entraînement. |
+| 190–196 | Ramène chaque N dans [−1, 1] avec x = 2N/10 − 1 et crée les tenseurs PyTorch. |
+| 198–202 | Tire une fois pour toutes le bruit et les instants de validation, pour que la perte de validation soit comparable d'une époque à l'autre. |
+| 204–205 | Affiche la taille des données et les paramètres de normalisation. |
+| 211–213 | Crée le réseau et affiche son nombre de paramètres. |
+| 215–217 | Crée l'optimiseur Adam et la décroissance du taux d'apprentissage en cosinus. |
+| 220–224 | Calcule la perte du Flow Matching : écart entre la vitesse prédite et x1 − x0. |
+| 230–237 | Prépare les listes de pertes et démarre le chronomètre. |
+| 239–261 | Boucle d'entraînement : mélange, lots de 256, déquantification, bruit, instant, perte, correction des poids. |
+| 262–266 | Calcule la perte de validation (sans correction des poids). |
+| 267–276 | Mémorise les pertes, garde les poids de la meilleure époque et affiche une ligne toutes les 10 époques. |
+| 278–283 | Affiche la durée et les pertes première / meilleure / dernière. |
+| 288–292 | Enregistre les poids (`fm_model.pth`) et la normalisation (`fm_normalization_params.npz`). |
+| 293–304 | Enregistre tous les réglages et l'historique des pertes (`fm_config.json`). |
+| 306–323 | Trace la courbe de perte, l'enregistre (`fm_courbe_loss.png`), puis `plt.show()`. |
+| 325–326 | Affiche la liste des fichiers enregistrés. |
+
+### Choix faits (et pourquoi)
+- **Réseau** : exactement les tailles de CLAUDE.md §5 et du rapport (tableau 2). Choix non précisés par le rapport :
+  - les 32 fréquences du codage du temps sont réparties régulièrement en échelle logarithmique entre 1 et 1000
+    (« du lent au rapide ») ; elles sont recalculées à partir de `fm_config.json`, pas stockées dans `fm_model.pth` ;
+  - FiLM est écrit `u·(1 + γ) + β` : au début de l'entraînement (γ ≈ 0), la modulation ne change presque rien,
+    ce qui stabilise les premières époques. C'est la même opération « multiplier puis décaler » que dans le rapport ;
+  - pas de fonction d'activation entre le contexte et FiLM, ni après la couche dense du temps, comme dans le rapport.
+- **Vecteur nul du guidage** : présent dans le réseau (64 paramètres) mais jamais utilisé tant que
+  `guidage_p_masque = 0`. Le masquage est déjà écrit dans la boucle ; avec p = 0 il ne masque jamais.
+- **Appariement optimal / EMA** : drapeaux présents mais à `False` ; s'ils sont mis à `True`, le script s'arrête avec
+  un message clair plutôt que de les ignorer en silence.
+- **Perte de validation** : bruit x0 et instants t tirés une seule fois (graine 47), sans déquantification. Sans cela,
+  la perte de validation changerait d'une époque à l'autre à cause du hasard, et le choix de la « meilleure » époque
+  serait du bruit.
+- **Perte affichée** : moyenne par exemple et par composante (le FFNN du cours affiche une somme sur les lots).
+- **Historique des pertes** dans `fm_config.json` (clé `resultats`) : le contrat de fichiers (CLAUDE.md §4) ne prévoit
+  pas de fichier séparé, et `verifier_entrainement.py` en a besoin pour le contrôle b.
+- **Reproductibilité** : deux exécutions successives donnent exactement les mêmes 200 pertes d'entraînement et de
+  validation (vérifié), sur CPU.
+
+### Nombre de paramètres
+**804 613 paramètres** (3,2 Mo en float32). Le rapport annonce « environ 8 × 10⁵ ». Détail : projection d'entrée 1 536 ;
+temps 4 160 ; condition 4 480 + vecteur nul 64 ; 4 blocs × 198 144 = 792 576 ; sortie 1 797.
+
+### Pertes et durée
+| | Époque 1 | Meilleure (époque 140) | Dernière (époque 200) |
+|---|---|---|---|
+| Perte d'entraînement | 2.1546 | – | 0.7496 |
+| Perte de validation | 1.5739 | **0.7521** | 0.7557 |
+
+**Durée d'entraînement : 7.97 s** (CPU, 810 exemples, 4 lots par époque, 800 pas d'optimisation au total).
+
+Sortie console complète de `FM_training.py` :
+```
+Données : 900 exemples d'entraînement -> 810 pour apprendre, 90 pour la validation
+Condition : moyenne = [27.6038 -8.628  38.2013  0.6579]   écart-type = [ 2.875   3.0621 25.0685  0.3032]
+
+Réseau VelocityNet : 804613 paramètres (3.2 Mo en float32)
+
+Entraînement : 200 époques, lots de 256, Adam lr = 0.001 (décroissance en cosinus)
+Époque    1/200  loss train = 2.1546  loss val = 1.5739  lr = 1.00e-03
+Époque   10/200  loss train = 0.9366  loss val = 0.9211  lr = 9.94e-04
+Époque   20/200  loss train = 0.8566  loss val = 0.8585  lr = 9.76e-04
+Époque   30/200  loss train = 0.8475  loss val = 0.8490  lr = 9.46e-04
+Époque   40/200  loss train = 0.8317  loss val = 0.8306  lr = 9.05e-04
+Époque   50/200  loss train = 0.7857  loss val = 0.8793  lr = 8.54e-04
+Époque   60/200  loss train = 0.8134  loss val = 0.8064  lr = 7.94e-04
+Époque   70/200  loss train = 0.7708  loss val = 0.8270  lr = 7.27e-04
+Époque   80/200  loss train = 0.7931  loss val = 0.8220  lr = 6.55e-04
+Époque   90/200  loss train = 0.8042  loss val = 0.8161  lr = 5.78e-04
+Époque  100/200  loss train = 0.7934  loss val = 0.8115  lr = 5.00e-04
+Époque  110/200  loss train = 0.7454  loss val = 0.7882  lr = 4.22e-04
+Époque  120/200  loss train = 0.8020  loss val = 0.7964  lr = 3.45e-04
+Époque  130/200  loss train = 0.7409  loss val = 0.7752  lr = 2.73e-04
+Époque  140/200  loss train = 0.7525  loss val = 0.7521  lr = 2.06e-04
+Époque  150/200  loss train = 0.7234  loss val = 0.7562  lr = 1.46e-04
+Époque  160/200  loss train = 0.7180  loss val = 0.7637  lr = 9.55e-05
+Époque  170/200  loss train = 0.7462  loss val = 0.7643  lr = 5.45e-05
+Époque  180/200  loss train = 0.7179  loss val = 0.7561  lr = 2.45e-05
+Époque  190/200  loss train = 0.7358  loss val = 0.7551  lr = 6.16e-06
+Époque  200/200  loss train = 0.7496  loss val = 0.7557  lr = 0.00e+00
+
+=== Entraînement terminé en 7.97 secondes ===
+Meilleure époque (validation) : 140   loss val = 0.7521
+Loss train : première = 2.1546   dernière = 0.7496
+Loss val   : première = 1.5739   dernière = 0.7557
+```
+
+### Sortie complète de `outils/verifier_entrainement.py`
+```
+================================================================================
+VÉRIFICATION DE L'ENTRAÎNEMENT (bilan de santé, pas l'évaluation de l'étape 3)
+================================================================================
+
+[a] Reconstruction du réseau depuis fm_config.json et chargement de fm_model.pth
+  Réglages du réseau lus dans fm_config.json : {'dim_x': 5, 'dim_condition': 4, 'largeur': 256, 'nb_blocs': 4, 'nb_frequences_temps': 32, 'freq_temps_min': 1.0, 'freq_temps_max': 1000.0, 'dim_temps': 64, 'dim_condition_cachee': 64}
+  Paramètres : 804613 (fm_config.json annonce 804613)
+  Chargement strict des poids : réussi
+  ==> PASS
+
+[b] Perte de validation : époque 1 vs meilleure époque
+  Époque 1 : 1.5739   meilleure (époque 140) : 0.7521   baisse : 52.2 %
+  (pour mémoire, loss train : époque 1 = 2.1546, dernière = 0.7496)
+  ==> PASS
+
+[c] Génération : 20 échantillons de test x 64 candidats, Euler 20 pas
+  Valeurs continues générées : min = -1.712   max = 1.602  (échelle [-1, 1] attendue)
+
+[d] Total attendu N_tot = round(10^(G/20)) (propriété P1)
+  Contrôle : N_tot attendu = somme de l'architecture de référence pour 20/20 échantillons
+
+[e] Bilan des candidats
+  Candidats dont le total vaut N_tot              :  40.0 %  (512/1280)
+  Échantillons avec au moins un candidat correct  : 100.0 %  (20/20)
+  Candidats distincts par échantillon (moyenne)   :  63.6 sur 64  (min 62, max 64)
+  Écart moyen |total - N_tot|                     :  0.75 éléments  (médiane 1)
+  Candidats sans aucun élément                    : 0
+  Pour comparaison, niveau du hasard (architectures de la base tirées au hasard) : 3.8 %
+
+  Trois exemples (5 premiers candidats de chacun) :
+
+  Échantillon de test 0 : G = 29.83 dB, SSL = -9.28 dB, HPBW = 73.15°, theta0 = 109.92°  ->  N_tot attendu = 31
+    Référence  : [ 8  4 10  0  9]  (total 31)
+    Candidat 1 : [ 1 10  6  4  9]  (total 30)
+    Candidat 2 : [8 8 1 9 5]  (total 31, correct)
+    Candidat 3 : [ 9 10  2  6  5]  (total 32)
+    Candidat 4 : [8 8 7 2 5]  (total 30)
+    Candidat 5 : [6 5 3 9 8]  (total 31, correct)
+    Sur les 64 candidats : 27 ont le bon total, 64 distincts
+
+  Échantillon de test 1 : G = 26.85 dB, SSL = -7.34 dB, HPBW = 20.90°, theta0 = 47.95°  ->  N_tot attendu = 22
+    Référence  : [0 9 2 5 6]  (total 22)
+    Candidat 1 : [3 5 1 6 6]  (total 21)
+    Candidat 2 : [3 0 5 9 6]  (total 23)
+    Candidat 3 : [8 0 3 6 4]  (total 21)
+    Candidat 4 : [7 2 3 7 4]  (total 23)
+    Candidat 5 : [2 7 2 9 3]  (total 23)
+    Sur les 64 candidats : 21 ont le bon total, 64 distincts
+
+  Échantillon de test 2 : G = 24.61 dB, SSL = -5.21 dB, HPBW = 14.77°, theta0 = 153.03°  ->  N_tot attendu = 17
+    Référence  : [1 1 8 1 6]  (total 17)
+    Candidat 1 : [ 4  0  0  2 10]  (total 16)
+    Candidat 2 : [4 6 3 3 2]  (total 18)
+    Candidat 3 : [2 3 5 2 4]  (total 16)
+    Candidat 4 : [1 4 0 6 5]  (total 16)
+    Candidat 5 : [5 2 0 8 3]  (total 18)
+    Sur les 64 candidats : 30 ont le bon total, 63 distincts
+
+================================================================================
+BILAN
+  PASS  a. réseau reconstruit depuis fm_config.json
+  PASS  b. baisse de la perte de validation >= 30 %
+  (c à e : indicateurs affichés, sans seuil de réussite)
+================================================================================
+```
+
+### Sortie complète de `outils/verifier_blocs_communs.py`
+```
+================================================================================
+VÉRIFICATION DES BLOCS COMMUNS (livrable/)
+================================================================================
+  trouvé : bloc 'VelocityNet' dans FM_training.py (lignes 98-162)
+  trouvé : bloc 'parametres_physiques' dans dataset_FM.py (lignes 43-52)
+  trouvé : bloc 'calcul_AF_performance_metrics' dans dataset_FM.py (lignes 55-140)
+
+[PASS] bloc 'VelocityNet' : 1 copie(s) dans FM_training.py
+        une seule copie pour l'instant : rien à comparer
+        scripts annoncés pas encore créés : test_model_FM.py
+
+[PASS] bloc 'calcul_AF_performance_metrics' : 1 copie(s) dans dataset_FM.py
+        une seule copie pour l'instant : rien à comparer
+        scripts annoncés pas encore créés : test_model_FM.py
+
+[PASS] bloc 'parametres_physiques' : 1 copie(s) dans dataset_FM.py
+        une seule copie pour l'instant : rien à comparer
+        scripts annoncés pas encore créés : test_model_FM.py
+
+Comparaison avec la fonction originale du professeur (prof/test_model_FFNN.py) :
+  [PASS] dataset_FM.py : fonction identique à l'originale
+
+================================================================================
+TOUS LES BLOCS COMMUNS SONT COHÉRENTS
+================================================================================
+```
+
+### Lecture honnête des résultats
+- **Le modèle apprend-il ? Oui, et il utilise la condition.** La perte de validation baisse de 52 %. Surtout, 40 % des
+  candidats générés ont exactement le nombre total d'éléments imposé par G, contre 3,8 % si on tirait des architectures
+  de la base au hasard (10 fois mieux). L'écart moyen au bon total est de 0,75 élément. Les 20 échantillons ont tous au
+  moins un candidat avec le bon total (en moyenne 25 sur 64).
+- **Surapprentissage ? Pas visible.** Les courbes d'entraînement et de validation restent collées (0.750 contre 0.756 à
+  la fin). Avec 805 000 paramètres pour 810 exemples, on pouvait s'y attendre, mais la perte du Flow Matching est
+  très « bruitée » par construction : à chaque passage, le même exemple reçoit un nouveau bruit x0, un nouvel instant t
+  et une nouvelle déquantification, donc le réseau ne peut pas apprendre les exemples par cœur aussi facilement qu'un
+  FFNN. De plus, 200 époques de 4 lots ne font que 800 pas d'optimisation : le réseau est plutôt **sous-entraîné**
+  que surentraîné. La courbe est presque plate après l'époque 140.
+- **La valeur 0,75 elle-même ne dit pas grand-chose.** La perte du Flow Matching ne peut pas descendre à 0 : plusieurs
+  trajets (bruit → architecture) passent par le même point x_t avec des directions différentes (rapport, §3.3), et le
+  réseau ne peut prédire que leur moyenne. On ne connaît pas ce plancher ; seules les comparaisons entre versions,
+  et surtout l'évaluation physique de l'étape 3, diront si le modèle est bon.
+- **Diversité très élevée** : 63,6 candidats distincts sur 64. C'est voulu (plusieurs solutions), mais 60 % des
+  candidats n'ont pas le bon total (écart médian : 1 élément), et certaines valeurs générées sortent de
+  [−1, 1] (de −1,71 à 1,60), donc sont ramenées à 0 ou 10 par la limitation. Le guidage (étape 4) sert justement à
+  resserrer les candidats autour de la condition.
+- **Ce qu'on ne sait pas encore** : si les candidats respectent SSL et HPBW. Seule la vérification avec le code du
+  professeur (étape 3) le dira. Le contrôle P1 ne porte que sur G, et sur 20 échantillons seulement.
+
+### Ce qui surprend
+- **L'entraînement est très rapide** : 8 s sur CPU. Le passage à 50 000 exemples (étape 4) multipliera le nombre de pas
+  par ~60, soit de l'ordre de 8 minutes : toujours raisonnable sur CPU.
+- **La perte de validation de l'époque 1 (1.57) est plus basse que celle d'entraînement (2.15).** Ce n'est pas une
+  anomalie : la perte d'entraînement est la moyenne pendant l'époque (les premiers lots, avec un réseau encore aléatoire,
+  sont très mauvais), alors que la validation est mesurée à la fin de l'époque.
+- `plt.show()` émet l'avertissement « FigureCanvasAgg is non-interactive » en mode sans affichage, comme les scripts du
+  professeur ; sans conséquence.
+
+### Questions ouvertes
+- Faut-il un contrôle de « niveau de base » plus fin pour l'étape 3 (par exemple : tirer au hasard des architectures
+  ayant le bon total, et voir si le modèle fait mieux sur SSL et HPBW) ? Cela distinguerait ce que le modèle apprend
+  au-delà de P1.
