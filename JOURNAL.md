@@ -329,3 +329,23 @@ TOUS LES BLOCS COMMUNS SONT COHÉRENTS
 - `torch.manual_seed(46)` impose d'importer torch dans `dataset_FM.py` et `repartition_training_test_FM.py`, qui ne
   s'en servent pas (~5 s de chargement en plus). On l'a fait pour respecter la règle « every script we write » ;
   à retirer si vous préférez limiter la règle aux scripts qui utilisent torch.
+
+---
+
+## Maintenance : nettoyage graines torch et bloc physique inutile
+
+*Date : 2026-11-10*
+
+- `livrable/dataset_FM.py` et `livrable/repartition_training_test_FM.py` : suppression de `import torch` et de
+  `torch.manual_seed(46)` (ces scripts n'utilisent pas torch ; répond à la question ouverte de l'étape 1).
+- `livrable/repartition_training_test_FM.py` : suppression du BLOC COMMUN `parametres_physiques` (inutile : le script
+  ne fait que répartir des tableaux). L'en-tête du bloc dans `dataset_FM.py` ne liste plus que
+  `dataset_FM.py, test_model_FM.py`.
+- `CLAUDE.md` (modifications autorisées explicitement) : §4 « Seeds » → graine 46 pour chaque bibliothèque aléatoire
+  réellement utilisée (NumPy toujours, PyTorch dans les scripts qui utilisent torch) ; §6 → le bloc physique est
+  identique dans les scripts qui calculent de la physique (`dataset_FM.py`, `test_model_FM.py`).
+- Ajout de `outils/afficher_fichier.py` (outil de développement) : affiche le contenu des fichiers binaires
+  `.npy`, `.mat`, `.npz`, `.pth` que VS Code ne sait pas ouvrir. Docstring en français avec les commandes d'usage.
+- Relance : `dataset_FM.py`, `repartition_training_test_FM.py`, `verifier_physique.py` (5/5 PASS),
+  `verifier_blocs_communs.py` (PASS ; chaque bloc n'a plus qu'une copie pour l'instant). Les 6 matrices de `livrable/`
+  sont toujours identiques bit à bit à celles de `prof/`.

@@ -55,9 +55,7 @@ Scripts communicate **only through files** in `livrable/`. Names, shapes and key
 - `Moutput` rows: `N1..N5`, number of elements per ring, integers 0..10 stored as floats. All-zero is invalid.
 - Files store **features × samples** (columns = samples). Scripts transpose to **samples × features** when loading for PyTorch.
 - Split: 90 % training / 10 % test, seed `46`, exactly like the professor. Validation (10 % of training) is carved out inside `FM_training.py`.
-- Seeds fixed to 46 for **both** NumPy (`np.random.seed(46)`) and PyTorch (`torch.manual_seed(46)`) in every script we write,
-  so every run is reproducible. The professor's FFNN does not fix the torch seed, so it is not reproducible:
-  for comparisons it must be trained several times and reported as mean ± std.
+- Seeds fixed to 46 for every random library a script actually uses (NumPy always, PyTorch in scripts that use torch).
 
 **Our files never overwrite the professor's:** every file we create starts with `fm_`
 (e.g. `fm_normalization_params.npz`, not `normalization_params.npz`).
@@ -85,7 +83,7 @@ Like the professor's own code, each script stays **self-contained**: shared code
 - Each copied block is wrapped in
   `# ===== BLOC COMMUN : <nom> — identique dans <scripts> — ne pas modifier ici seul =====` … `# ===== FIN BLOC COMMUN =====`.
 - `outils/verifier_blocs_communs.py` checks that all copies of each block are byte-identical. Run it before every commit.
-- Physical parameter block (identical in every script):
+- Physical parameter block (identical in every script that computes physics: `dataset_FM.py`, `test_model_FM.py`):
   `carrierFreq = 2.45e9`, `c = 3e8`, `lambda_ = c / carrierFreq`, `r0 = 0.2 * lambda_`, `delta_r = 0.5 * lambda_`,
   `max_rings = 5`, `max_elements = 10`.
 

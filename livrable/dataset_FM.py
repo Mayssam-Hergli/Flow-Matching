@@ -21,7 +21,6 @@ from scipy.signal import find_peaks
 import scipy.io
 import os
 import time
-import torch
 
 
 ### Affichage visuel de démarcation (alternative à l'effacement console)
@@ -39,10 +38,9 @@ theta0_max_deg = 180     # theta0 est tiré uniformément dans [0, theta0_max_de
 
 # === Graines (reproductibilité) ===
 np.random.seed(46)       # même graine que le professeur : même tirage des architectures et de theta0
-torch.manual_seed(46)    # PyTorch n'est pas utilisé ici ; graine fixée par règle du projet (CLAUDE.md §4)
 
 
-# ===== BLOC COMMUN : parametres_physiques — identique dans dataset_FM.py, repartition_training_test_FM.py, FM_training.py, test_model_FM.py — ne pas modifier ici seul =====
+# ===== BLOC COMMUN : parametres_physiques — identique dans dataset_FM.py, test_model_FM.py — ne pas modifier ici seul =====
 # Paramètres physiques du réseau (identiques à ceux du professeur)
 carrierFreq = 2.45e9          # fréquence porteuse (Hz)
 c = 3e8                       # vitesse de la lumière (m/s)
